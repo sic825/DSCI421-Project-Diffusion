@@ -17,6 +17,34 @@ dependencies:
   - pillow
   - tqdm
   - pip:
+      - --no-deps
+      - xformers==0.0.27.post2
+      - diffusers==0.30.0
+      - transformers==4.44.0
+      - accelerate==0.33.0
+      - safetensors
+      - nvtx
+      - ftfy
+      - regex
+      - git+https://github.com/openai/CLIP.gitname: sd-profiling
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+  - pytorch=2.4.*
+  - torchvision=0.19.*
+  - pytorch-cuda=12.4
+  - numpy
+  - pandas
+  - pyyaml
+  - jupyter
+  - matplotlib
+  - pillow
+  - tqdm
+  - pip:
       - diffusers==0.30.0
       - transformers==4.44.0
       - accelerate==0.33.0
