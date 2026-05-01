@@ -1,0 +1,72 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual envs
+venv/
+env/
+.venv/
+.conda/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project-specific: large artifacts
+*.nsys-rep
+*.qdrep
+*.sqlite
+*.qdstrm
+results/nsys_reports/*.nsys-rep
+results/nsys_reports/*.sqlite
+results/images/*.png
+results/images/*.jpg
+
+# Keep the directory structure but not the contents
+!results/nsys_reports/.gitkeep
+!results/images/.gitkeep
+
+# Model weights and HuggingFace cache
+models/
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+.cache/
+hf_cache/
+
+# Logs
+*.log
+slurm-*.out
+
+# Secrets
+.env
+*.key

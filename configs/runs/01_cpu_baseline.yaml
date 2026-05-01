@@ -1,0 +1,21 @@
+# Run 01: CPU baseline
+# Reference run for sanity checking outputs. Expected to take several minutes per image.
+# Only generate ONE image per prompt for CPU since each takes 5-15 minutes.
+
+run_id: "01_cpu_baseline"
+description: "CPU-only FP32 baseline. Reference for output consistency check."
+
+device: cpu
+dtype: float32
+attention_backend: vanilla
+num_gpus: 0
+batch_size: 1
+
+# Subset prompts for CPU since runs are expensive
+prompts_subset: [p01, p04]  # one realistic, one simple
+
+# Number of inference repetitions (after warmup) for timing
+warmup_runs: 1
+timed_runs: 2
+
+profile: false  # nsys doesn't profile CPU runs meaningfully here

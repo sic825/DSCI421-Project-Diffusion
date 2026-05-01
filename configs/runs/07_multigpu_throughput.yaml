@@ -1,0 +1,25 @@
+# Run 07: Multi-GPU throughput
+# Both 2080 Tis with batched inference using accelerate. Best precision + best attention.
+# Measure images per second (throughput), not single-image latency.
+# Per-image latency CANNOT improve with this setup since the denoising loop is sequential
+# within an image - we need ~linear speedup on throughput as confirmation.
+
+run_id: "07_multigpu_throughput"
+description: "Dual 2080 Ti FP16 + best attention, batched inference for throughput."
+
+device: cuda  # accelerate handles device placement
+dtype: float16
+attention_backend: sdpa  # update if xformers wins in run 06
+num_gpus: 2
+batch_size: 4  # per-GPU batch, total effective batch = 8
+
+prompts_subset: all
+
+warmup_runs: 2
+timed_runs: 3
+
+profile: true
+nsys_output: "results/nsys_reports/07_multigpu_throughput"
+
+# Multi-GPU launch via accelerate
+launch_command: "accelerate launch --num_processes 2 --multi_gpu"

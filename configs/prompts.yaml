@@ -1,0 +1,31 @@
+# Fixed prompts and seeds used across every configuration.
+# Do not change after the first benchmark run, or earlier results become incomparable.
+#
+# Prompts chosen to span: realistic photo, abstract/artistic, complex composition,
+# text-heavy (known SD weakness), and simple subject. CLIP score depends on prompt
+# diversity to be meaningful.
+
+prompts:
+  - id: p01
+    text: "a photograph of an astronaut riding a horse on the moon, highly detailed"
+    seed: 42
+  - id: p02
+    text: "an oil painting of a serene mountain landscape at sunset, impressionist style"
+    seed: 123
+  - id: p03
+    text: "a cyberpunk street market at night, neon signs, rain, cinematic lighting"
+    seed: 7
+  - id: p04
+    text: "a cat wearing a wizard hat, sitting on a stack of ancient books"
+    seed: 2026
+  - id: p05
+    text: "a minimalist logo of a fox, geometric, vector art, white background"
+    seed: 999
+
+# Inference parameters held constant across every run
+inference:
+  num_inference_steps: 25
+  guidance_scale: 7.5
+  height: 512
+  width: 512
+  scheduler: DPMSolverMultistepScheduler

@@ -1,0 +1,20 @@
+# Run 05: FP16 + PyTorch SDPA
+# On top of best precision (FP16), swap vanilla attention for PyTorch's built-in
+# scaled_dot_product_attention with memory-efficient backend.
+
+run_id: "05_gpu_fp16_sdpa"
+description: "FP16 with PyTorch SDPA memory-efficient attention."
+
+device: cuda:0
+dtype: float16
+attention_backend: sdpa
+num_gpus: 1
+batch_size: 1
+
+prompts_subset: all
+
+warmup_runs: 3
+timed_runs: 5
+
+profile: true
+nsys_output: "results/nsys_reports/05_gpu_fp16_sdpa"
