@@ -1,0 +1,7 @@
+run_id,config_label,mean,std,min,max,count,speedup_vs_fp32
+01_cpu_baseline,CPU FP32,173.9192,0.1056,173.8096,174.0474,4,0.03
+02_gpu_baseline_fp32,GPU FP32 vanilla,5.2093,0.0655,5.0457,5.2914,75,1.0
+03_gpu_fp16,GPU FP16 vanilla,2.2878,0.0075,2.2714,2.2961,25,2.277
+04_gpu_bf16,GPU BF16 vanilla,9.6639,0.0132,9.6304,9.6789,25,0.539
+05_gpu_fp16_sdpa,GPU FP16 SDPA,1.8293,0.0029,1.8236,1.834,25,2.848
+06_gpu_fp16_xformers,GPU FP16 xformers,1.854,0.0029,1.8491,1.8583,25,2.81

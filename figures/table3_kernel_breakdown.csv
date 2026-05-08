@@ -1,0 +1,9 @@
+kernel_category,fp32_pct_gpu_time,fp32_total_s,fp16_sdpa_pct_gpu_time,fp16_sdpa_total_s,notes
+"Convolution (Winograd, FP32)",21.3,31.09,0.0,0.0,FP32-only convolution kernels
+FP32 GEMM matmul (volta_sgemm),36.6,53.39,0.0,0.0,Replaced by Tensor Core kernels in FP16
+Attention softmax (cunn_SoftMaxForwardSmem),9.6,13.99,0.0,0.0,ELIMINATED in SDPA via fused FMHA kernel
+Tensor Core FP16 GEMM (turing_fp16_s1688gemm),0.0,0.0,28.4,13.69,Tensor Core path (only active in FP16)
+Fused multi-head attention (fmha_cutlassF_f16),0.0,0.0,18.7,9.07,Replaces separate softmax+matmul in SDPA
+FP16 implicit GEMM convolution (sm75_xmma_fprop),0.0,0.0,22.6,10.96,FP16 convolution via Tensor Cores
+Layout conversion (nchwToNhwc),0.0,0.0,13.3,6.43,Memory layout reformatting for Tensor Cores
+"Memory ops (memcpy, memset)",4.7,6.86,7.2,3.49,Host-device transfers + buffer init

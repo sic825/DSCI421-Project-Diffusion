@@ -1,0 +1,8 @@
+config,run_id,mean_latency_s,speedup_vs_fp32,mean_clip_score
+CPU FP32,01_cpu_baseline,173.919,0.03,0.3578
+GPU FP32 vanilla,02_gpu_baseline_fp32,5.209,1.0,0.3369
+GPU FP16 vanilla,03_gpu_fp16,2.288,2.277,0.3339
+GPU BF16 vanilla,04_gpu_bf16,9.664,0.539,0.3344
+GPU FP16 SDPA,05_gpu_fp16_sdpa,1.829,2.848,0.3357
+GPU FP16 xformers,06_gpu_fp16_xformers,1.854,2.81,0.3357
+Multi-GPU FP16 SDPA,08_multigpu_throughput,1.729,1.665,see config 05 (identical images)
