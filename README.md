@@ -150,5 +150,3 @@ Open with `nsys-ui <filename>.nsys-rep` (Nsight Systems UI, available cross-plat
 ## Repository state
 
 This repo represents the final submission state as of May 8, 2026. The git history shows the development process; the latest commit on `main` is the submission version.
-
-For the final report PDF and the demo video, see the `report/` directory and the project submission on Course Site.
