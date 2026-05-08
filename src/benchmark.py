@@ -7,6 +7,10 @@ to a CSV that the analysis notebook reads.
 Usage:
     python -m src.benchmark --config configs/runs/02_gpu_baseline_fp32.yaml
 
+Optional flags for multi-GPU experiments:
+    --gpu-tag        Suffix appended to run_id (e.g., 'gpu0')
+    --prompt-subset  Comma-separated prompt IDs to override config's subset
+
 This module assumes it is invoked from the project root so relative paths resolve.
 """
 from __future__ import annotations
@@ -83,11 +87,6 @@ def _run_single(
     t0 = time.perf_counter()
 
     with nvtx.annotate("full_inference", color="blue"):
-        # The pipeline call internally runs text encoding, denoising loop, and
-        # VAE decode. We can't easily wrap each stage in NVTX without subclassing
-        # the pipeline; instead we rely on Diffusers' own internal NVTX hooks
-        # if present, plus the outer range here. For finer-grained ranges, the
-        # nsys timeline view shows the kernel-level breakdown anyway.
         result = pipe(
             prompt=prompt_text,
             num_inference_steps=inference_cfg["num_inference_steps"],
@@ -118,11 +117,31 @@ def _append_row(row: dict[str, Any]) -> None:
         csv.DictWriter(f, fieldnames=CSV_FIELDS).writerow(row)
 
 
-def run_benchmark(run_config_path: str, prompts_config_path: str) -> None:
-    """Main entry point: execute one full run from a config file."""
+def run_benchmark(
+    run_config_path: str,
+    prompts_config_path: str,
+    gpu_tag: str | None = None,
+    prompt_subset_override: str | None = None,
+) -> None:
+    """Main entry point: execute one full run from a config file.
+
+    Optional args (used by the multi-GPU launcher):
+        gpu_tag: appended to run_id so each process logs distinct rows
+        prompt_subset_override: comma-separated prompt IDs to override config's subset
+    """
     run_cfg = load_yaml(run_config_path)
     prompts_cfg = load_yaml(prompts_config_path)
     inference_cfg = prompts_cfg["inference"]
+
+    # Apply gpu_tag suffix to run_id so multi-GPU rows are distinguishable
+    if gpu_tag:
+        run_cfg["run_id"] = f"{run_cfg['run_id']}_{gpu_tag}"
+
+    # Override prompt subset from CLI if provided (used by multi-GPU launcher)
+    if prompt_subset_override:
+        run_cfg["prompts_subset"] = [
+            p.strip() for p in prompt_subset_override.split(",")
+        ]
 
     print(f"\n=== Run: {run_cfg['run_id']} ===")
     print(f"    {run_cfg['description']}")
@@ -135,7 +154,7 @@ def run_benchmark(run_config_path: str, prompts_config_path: str) -> None:
     write_env_snapshot(snap, snapshot_dir)
 
     # Build pipeline
-    set_all_seeds(0)  # determinism for any pipeline-construction RNG
+    set_all_seeds(0)
     print("    Building pipeline...")
     pipe = build_pipeline(run_cfg)
 
@@ -149,8 +168,8 @@ def run_benchmark(run_config_path: str, prompts_config_path: str) -> None:
 
     device = run_cfg["device"]
 
-    # Warmup runs - CRITICAL. First inference includes CUDA context init,
-    # kernel JIT, and memory allocator warmup. Discard these timings.
+    # Warmup runs - first inference includes CUDA context init, kernel JIT,
+    # and memory allocator warmup. Discard these timings.
     if run_cfg["warmup_runs"] > 0:
         print("    Warmup...")
         warm_prompt = prompts[0]
@@ -205,8 +224,21 @@ def main() -> None:
         "--prompts", default="configs/prompts.yaml",
         help="Path to prompts YAML (default: configs/prompts.yaml)",
     )
+    parser.add_argument(
+        "--gpu-tag", default=None,
+        help="Suffix appended to run_id for multi-GPU experiments (e.g., 'gpu0')",
+    )
+    parser.add_argument(
+        "--prompt-subset", default=None,
+        help="Comma-separated prompt IDs to override config's prompts_subset (e.g., 'p01,p03,p05')",
+    )
     args = parser.parse_args()
-    run_benchmark(args.config, args.prompts)
+    run_benchmark(
+        args.config,
+        args.prompts,
+        gpu_tag=args.gpu_tag,
+        prompt_subset_override=args.prompt_subset,
+    )
 
 
 if __name__ == "__main__":

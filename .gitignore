@@ -47,8 +47,8 @@ Thumbs.db
 *.qdstrm
 results/nsys_reports/*.nsys-rep
 results/nsys_reports/*.sqlite
-results/images/*.png
-results/images/*.jpg
+# results/images/*.png  # commented out - we want to commit the SD outputs as evidence
+# results/images/*.jpg
 
 # Keep the directory structure but not the contents
 !results/nsys_reports/.gitkeep

@@ -1,0 +1,19 @@
+# Run 08: Multi-GPU throughput
+# Per-process config used by scripts/run_multigpu_throughput.sh. Each process
+# pins to one GPU via CUDA_VISIBLE_DEVICES and processes a subset of prompts.
+
+run_id: "08_multigpu_throughput"
+description: "Independent per-GPU FP16+SDPA processes for aggregate throughput."
+
+device: cuda:0
+dtype: float16
+attention_backend: sdpa
+num_gpus: 1
+batch_size: 1
+
+prompts_subset: all
+
+warmup_runs: 1
+timed_runs: 5
+
+profile: false
