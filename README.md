@@ -1,73 +1,154 @@
-# 421-project-diffusion
+# Profiling GPU Acceleration Techniques for Stable Diffusion v1.5 Inference
 
-Profiling GPU acceleration techniques for Stable Diffusion v1.5 inference on the Lehigh ECE HPC cluster. Final project for DSCI 421: Accelerating Computing for Deep Learning, Spring 2026.
+DSCI 421 Final Project, Spring 2026
+**Authors:** Vincent Caruso, Simon Chen, Matt Olson
+**Affiliation:** Department of Data Science, Lehigh University
 
-**Team:** Simon Chen (sic825), Vincent Caruso (vdc225), Matt Olson (mjo225)
+This project profiles inference performance of Stable Diffusion v1.5 across three optimization axes — numerical precision, attention backend, and dual-GPU throughput — on NVIDIA RTX 2080 Ti hardware. We measure latency, kernel-level performance via NVIDIA Nsight Systems, and output quality via CLIP scores across a fixed prompt and seed set.
 
-## Project structure
+## Headline results
+
+| Configuration | Latency (s/img) | Speedup vs FP32 | CLIP score |
+|---|---|---|---|
+| CPU FP32 | 173.92 | 0.030× | 0.358 |
+| GPU FP32 vanilla (baseline) | 5.21 | 1.00× | 0.337 |
+| GPU FP16 vanilla | 2.29 | 2.28× | 0.334 |
+| GPU BF16 vanilla | 9.66 | 0.54× | 0.334 |
+| GPU FP16 SDPA | 1.83 | 2.85× | 0.336 |
+| GPU FP16 xformers | 1.85 | 2.82× | 0.336 |
+| Dual-GPU FP16 SDPA | 1.73 | 4.58× throughput | 0.336 |
+
+Key findings:
+- FP16 with PyTorch SDPA achieves a 2.85× per-image latency speedup over FP32 by engaging Tensor Cores and eliminating the standalone softmax kernel via fused FMHA.
+- BF16 degrades performance by 1.86× because the 2080 Ti (Turing, sm_75) lacks native BF16 Tensor Core support and falls back to MAGMA software emulation.
+- Dual-GPU achieves a 4.58× throughput improvement over the FP32 baseline by running independent inference processes on each GPU.
+- No measurable quality regression across any GPU configuration (CLIP score range 0.334–0.337).
+
+## Repository structure
 
 ```
-configs/        YAML config files defining prompts, seeds, and run matrix
-src/            Python source for the pipeline, benchmark harness, and quality eval
-scripts/        Shell scripts that wrap benchmark.py for SLURM-style HPC runs
-notebooks/      Jupyter notebooks for environment checks and results analysis
-results/        Output directory for nsys reports, generated images, metrics CSV
-report/         Placeholder for the LaTeX report (kept in Overleaf)
+.
+├── README.md                          # This file
+├── environment.yml                    # Conda environment specification
+├── make_figures.py                    # Generates all report figures from results/
+├── configs/
+│   ├── prompts.yaml                   # Fixed prompt set with seeds
+│   └── runs/
+│       ├── 01_cpu_baseline.yaml
+│       ├── 02_gpu_baseline_fp32.yaml
+│       ├── 03_gpu_fp16.yaml
+│       ├── 04_gpu_bf16.yaml
+│       ├── 05_gpu_fp16_sdpa.yaml
+│       ├── 06_gpu_fp16_xformers.yaml
+│       └── 08_multigpu_throughput.yaml
+├── src/
+│   ├── benchmark.py                   # Main benchmark harness with NVTX ranges
+│   ├── pipeline.py                    # SD pipeline factory
+│   ├── quality.py                     # CLIP score evaluation
+│   └── utils.py                       # Seeding, env capture, config loading
+├── scripts/
+│   ├── run_all.sh                     # Sequential sweep across all single-GPU configs
+│   ├── profile_nsys.sh                # Wraps benchmark with nsys profiling
+│   └── run_multigpu_throughput.sh     # Two-process dual-GPU launcher
+├── notebooks/
+│   ├── 01_environment_check.ipynb     # Verify CUDA, GPU detection, model load
+│   ├── 03_results_analysis.ipynb      # Post-hoc analysis of metrics.csv
+│   └── int8_smoke_test.ipynb          # Exploratory INT8 quantization test
+├── results/
+│   ├── metrics.csv                    # Per-iteration timing data
+│   ├── clip_scores.csv                # CLIP scores per (config, prompt)
+│   ├── system_info.txt                # CPU/GPU/NVLink hardware specifications
+│   ├── images/                        # Generated images (32 PNGs)
+│   ├── multigpu_logs/                 # Stdout/stderr from dual-GPU run
+│   └── env_snapshots/                 # Per-run environment captures
+├── figures/                           # Charts and visual quality grid
+└── report/                            # LaTeX source and final PDF
 ```
 
-## Hardware target
+## Reproducing the results
 
-Lehigh ECE HPC node (`hpc05.ece.lehigh.edu`):
+### Hardware
 
-- 2x NVIDIA GeForce RTX 2080 Ti (11 GB VRAM each, NVLink ~25.78 GB/s per link, 2 links per GPU)
-- Driver 565.57.01, CUDA runtime 12.7, nvcc 12.4
-- Anaconda Python 3.12.2 in `/opt/anaconda/Anaconda3-2024.10-1`
-- NVIDIA HPC SDK 24.11 at `/opt/nvidia/hpc_sdk/Linux_x86_64/24.11`
+Tested on the Lehigh ECE HPC cluster (hpc05.ece.lehigh.edu):
+- 2× NVIDIA GeForce RTX 2080 Ti (Turing, sm_75), 11 GB VRAM each
+- NVLink connection (~25.78 GB/s per link, 2 links per GPU)
+- Intel Xeon E5-1630 v4 @ 3.70 GHz, 4 cores / 8 threads (Broadwell-EP)
+- 251 GB system memory
+- NVIDIA driver 565.57.01, CUDA runtime 12.4
 
-## Environment setup
+### Software environment
 
 ```bash
-# Create a dedicated conda environment so we don't touch base
+# Create the conda environment
 conda env create -f environment.yml
 conda activate sd-profiling
 
-# Verify CUDA is visible to PyTorch
-python -c "import torch; print(torch.cuda.is_available(), torch.version.cuda, torch.cuda.device_count())"
+# Verify the environment - opens notebooks/01_environment_check.ipynb
+jupyter notebook notebooks/01_environment_check.ipynb
 ```
 
-Expected output: `True 12.4 2`
+Key dependencies (full list in `environment.yml`):
+- PyTorch 2.4.1 + CUDA 12.4
+- diffusers 0.30.0
+- transformers 4.44.0
+- xformers 0.0.27.post2
+- OpenAI CLIP (from GitHub source, not PyPI)
 
-## Methodology
-
-We compare three categories of acceleration applied incrementally to the same Stable Diffusion 1.5 inference workload, holding model weights, prompts, seeds, sampler, and resolution constant across all runs.
-
-1. **Precision sweep:** FP32 (baseline) -> FP16 -> BF16. INT8 dropped from the proposal pending feasibility check.
-2. **Attention backend:** vanilla -> PyTorch SDPA memory-efficient -> xformers, on top of the best precision setting.
-3. **Multi-GPU throughput:** single-GPU vs dual-GPU batched inference using `accelerate`, measuring images-per-second rather than single-image latency.
-
-Profiling uses Nsight Systems for end-to-end timeline and per-kernel timing with NVTX ranges around each pipeline stage (text encode, denoising loop, VAE decode). One dominant attention kernel is profiled with Nsight Compute for occupancy and memory throughput.
-
-Quality is measured with CLIP score across a fixed prompt set with fixed seeds, plus visual side-by-side grids in the report.
-
-## Running benchmarks
+### Running the benchmark sweep
 
 ```bash
-# Single config run
-python -m src.benchmark --config configs/runs/01_cpu_baseline.yaml
-
-# Sweep all configs
+# Single-GPU sweep (configs 01-06, sequential)
 bash scripts/run_all.sh
 
-# Profile with Nsight Systems
-bash scripts/profile_nsys.sh configs/runs/04_fp16_sdpa.yaml
+# Dual-GPU throughput experiment
+bash scripts/run_multigpu_throughput.sh
+
+# Per-config nsys profiling (run individually for each config)
+bash scripts/profile_nsys.sh configs/runs/02_gpu_baseline_fp32.yaml
+bash scripts/profile_nsys.sh configs/runs/03_gpu_fp16.yaml
+bash scripts/profile_nsys.sh configs/runs/05_gpu_fp16_sdpa.yaml
+# (etc. for other configs)
 ```
 
-All runs append to `results/metrics.csv`. The analysis notebook reads this CSV plus the `.nsys-rep` files for plots.
+Results append to `results/metrics.csv`. Each run captures wall-clock latency for 5 prompts × 5 timed iterations after 3 warmup runs are discarded.
 
-## Reproducibility
+### Generating figures and tables
 
-Every run captures the full environment (driver version, CUDA version, PyTorch version, GPU model, NVLink status, environment variables) into the metrics CSV alongside timing data. Seeds are set deterministically. Any deviation from the reference output is logged.
+```bash
+python make_figures.py
+```
 
-## Status
+This produces all figures referenced in the report (`figures/fig1_latency_log.png`, etc.) plus three CSV tables and a `summary_for_report.txt` with all canonical numbers.
 
-In progress. Deadline: Friday, May 8, 2026 (report + code), Monday, May 11, 2026 (demo video).
+## Profiling artifacts (not in this repo)
+
+The Nsight Systems `.nsys-rep` files are too large for GitHub (~60 MB each, ~300 MB total). They can be regenerated via `scripts/profile_nsys.sh`, or accessed at:
+
+**[Lehigh Google Drive link](https://drive.google.com/drive/folders/1y4KKh3W2abIXzyqYn1PiQxkfAwPfzh_y?usp=sharing)**
+
+Available reports:
+- `02_gpu_baseline_fp32.nsys-rep` (FP32 vanilla, 67 MB)
+- `03_gpu_fp16.nsys-rep` (FP16 vanilla, 61 MB)
+- `04_gpu_bf16.nsys-rep` (BF16, 65 MB)
+- `05_gpu_fp16_sdpa.nsys-rep` (FP16 SDPA, 54 MB)
+- `06_gpu_fp16_xformers.nsys-rep` (FP16 xformers, 58 MB)
+
+Open with `nsys-ui <filename>.nsys-rep` (Nsight Systems UI, available cross-platform).
+
+## Methodology notes
+
+**Timing.** Latency measurements use `time.perf_counter()` with explicit `torch.cuda.synchronize()` before and after each measurement to ensure GPU work has completed. Three warmup iterations per config are discarded.
+
+**Reproducibility.** Each run captures full environment metadata (`results/env_snapshots/`) including driver version, CUDA version, PyTorch version, NVLink status, and config parameters. All seeds are fixed across configurations.
+
+**Quality.** Output quality is evaluated using OpenAI's CLIP ViT-B/32 to compute cosine similarity between each generated image and its source prompt. CLIP scores are reported in `results/clip_scores.csv`.
+
+**Multi-GPU implementation.** Dual-GPU is implemented as two independent Python processes pinned via `CUDA_VISIBLE_DEVICES`, each processing a disjoint subset of prompts. This is throughput parallelism (not data-parallel via NCCL); per-image latency cannot be reduced because SD's denoising loop is sequential within a single image.
+
+**INT8 (out of scope).** An exploratory INT8 test using bitsandbytes 0.43.3 is in `notebooks/int8_smoke_test.ipynb`. Result: 2.4× slower than FP16 SDPA because bitsandbytes only quantizes Linear layers (~31% of UNet parameters), and dequantization overhead at INT8/FP16 boundaries dominates. INT8 was excluded from the main sweep based on these findings.
+
+## Repository state
+
+This repo represents the final submission state as of May 8, 2026. The git history shows the development process; the latest commit on `main` is the submission version.
+
+For the final report PDF and the demo video, see the `report/` directory and the project submission on Course Site.
